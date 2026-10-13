@@ -1,0 +1,968 @@
+<?php
+session_start();
+require_once 'database/config.php';
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MinglaDent</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: #fffbee;
+            min-height: 100vh;
+        }
+
+        /* Navigation */
+        nav {
+            background-color: #fffbee;
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            transition: transform 0.3s ease-in-out;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        nav.hidden {
+            transform: translateY(-100%);
+        }
+
+      
+         .logo {
+            color: #6784c8;
+            font-size: 24px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+             }
+
+        .logo-icon {
+            font-size: 28px;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .nav-links a {
+            color: #6784c8;
+            text-decoration: none;
+            font-size: 16px;
+            font-weight: 500;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+            position: relative;
+        }
+
+        .nav-links a::after {
+            content: '▼';
+            position: absolute;
+            bottom: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            color: #000000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .nav-links a:hover::after {
+            opacity: 1;
+        }
+
+        .book-btn {
+            background-color: #6784c8;
+            color: #fffbee;
+            padding: 12px 24px;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .auth-buttons {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .user-info {
+            color: #6784c8;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .auth-btn {
+            padding: 10px 20px;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-family: 'Montserrat', sans-serif;
+        }
+
+        .auth-btn.login {
+            background-color: transparent;
+            color: #6784c8;
+            border: 2px solid #6784c8;
+        }
+
+        .auth-btn.login:hover {
+            background-color: #6784c8;
+            color: #fffbee;
+        }
+
+        .auth-btn.register {
+            background-color: #6784c8;
+            color: #fffbee;
+        }
+
+        .auth-btn.register:hover {
+            background-color: #5a6fa8;
+        }
+
+        .auth-btn.logout {
+            background-color: #dc3545;
+            color: #fffbee;
+        }
+
+        .auth-btn.logout:hover {
+            background-color: #c82333;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background-color: #fffbee;
+            border: 2px solid #6784c8;
+            border-radius: 10px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            position: relative;
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            font-size: 28px;
+            color: #6784c8;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .close-modal:hover {
+            color: #000;
+        }
+
+        .modal h2 {
+            color: #6784c8;
+            font-size: 36px;
+            font-weight: 600;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .modal .form-group {
+            margin-bottom: 20px;
+        }
+
+        .modal label {
+            display: block;
+            color: #6784c8;
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .modal input, .modal select {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 2px solid #6784c8;
+            border-radius: 5px;
+            background-color: #fffbee;
+            color: #6784c8;
+            font-family: 'Montserrat', sans-serif;
+        }
+
+        .modal input:focus, .modal select:focus {
+            outline: none;
+            border-color: #6784c8;
+        }
+
+        .modal button {
+            width: 100%;
+            padding: 15px;
+            background-color: #6784c8;
+            color: #fffbee;
+            border: none;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 5px;
+            font-family: 'Montserrat', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .modal button:hover {
+            background-color: #5a6fa8;
+        }
+
+        .modal .message {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .modal .message.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .modal .message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .modal .switch-auth {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .modal .switch-auth a {
+            color: #6784c8;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .modal .switch-auth a:hover {
+            text-decoration: underline;
+        }
+
+        .validation-message {
+            font-size: 12px;
+            margin-top: 5px;
+            display: none;
+        }
+
+        .validation-message.valid {
+            color: #28a745;
+            display: block;
+        }
+
+        .validation-message.invalid {
+            color: #dc3545;
+            display: block;
+        }
+
+        .input-valid {
+            border-color: #28a745 !important;
+        }
+
+        .input-invalid {
+            border-color: #dc3545 !important;
+        }
+
+        /* Hero Section */
+        .hero {
+            background: url('https://images.unsplash.com/photo-1606811841689-23dfddce3e95?w=1920&q=80');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: flex-start;
+            text-align: left;
+            padding: 100px 60px 40px 60px;
+        }
+
+        .hero h1 {
+            color: #6784c8;
+            font-size: 72px;
+            font-weight: 300;
+            margin-bottom: 20px;
+            letter-spacing: 2px;
+            text-shadow: 4px 4px 8px rgba(0, 0, 0, 0.9), 3px 3px 6px rgba(255, 251, 238, 0.95);
+        }
+
+        .hero p {
+            color: #6784c8;
+            font-size: 24px;
+            font-weight: 400;
+            max-width: 600px;
+            line-height: 1.6;
+            margin-bottom: 40px;
+            text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.9), 2px 2px 4px rgba(255, 251, 238, 0.95);
+        }
+
+        .buttons {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn-primary {
+            background-color: #6784c8;
+            color: #fffbee;
+            padding: 15px 40px;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        /* Features Section */
+        .features-section {
+            background-color: #fffbee;
+            padding: 80px 60px;
+        }
+
+        .features-section h2 {
+            color: #6784c8;
+            font-size: 48px;
+            font-weight: 600;
+            margin-bottom: 50px;
+            text-align: center;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .feature-card {
+            background-color: #fffbee;
+            border: 2px solid #6784c8;
+            border-radius: 10px;
+            padding: 40px 30px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            background-color: #6784c8;
+        }
+
+        .feature-card:hover h3,
+        .feature-card:hover p {
+            color: #fffbee;
+        }
+
+        .feature-card .icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+
+        .feature-card h3 {
+            color: #6784c8;
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .feature-card p {
+            color: #6784c8;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+
+        /* Stats Section */
+        .stats-section {
+            background-color: #6784c8;
+            padding: 80px 60px;
+            text-align: center;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .stat-item h3 {
+            color: #fffbee;
+            font-size: 48px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .stat-item p {
+            color: #fffbee;
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        /* Testimonials Section */
+        .testimonials-section {
+            background-color: #fffbee;
+            padding: 80px 60px;
+        }
+
+        .testimonials-section h2 {
+            color: #6784c8;
+            font-size: 48px;
+            font-weight: 600;
+            margin-bottom: 50px;
+            text-align: center;
+        }
+
+        .testimonials-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .testimonial-card {
+            background-color: #fffbee;
+            border: 2px solid #6784c8;
+            border-radius: 10px;
+            padding: 30px;
+        }
+
+        .testimonial-card p {
+            color: #6784c8;
+            font-size: 16px;
+            line-height: 1.8;
+            font-style: italic;
+            margin-bottom: 20px;
+        }
+
+        .testimonial-card .author {
+            color: #6784c8;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .testimonial-card .location {
+            color: #6784c8;
+            font-size: 14px;
+        }
+
+        /* CTA Section */
+        .cta-section {
+            background: url('https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?w=1920&q=80');
+            background-size: cover;
+            background-position: center;
+            padding: 100px 60px;
+            text-align: center;
+        }
+
+        .cta-section h2 {
+            color: #6784c8;
+            font-size: 48px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.8), 2px 2px 4px rgba(255, 251, 238, 0.9);
+        }
+
+        .cta-section p {
+            color: #6784c8;
+            font-size: 20px;
+            margin-bottom: 40px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8), 1px 1px 2px rgba(255, 251, 238, 0.9);
+        }
+
+        .cta-section .buttons {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+       <div class="logo">
+            <span class="logo-icon">🦷</span>
+            MinglaDent
+        </div>
+        <div class="nav-links">
+            <a href="index.php">Home</a>
+            <a href="about.php">About</a>
+            <a href="services.php">Services</a>
+            <a href="locations.php">Locations</a>
+            <a href="contact.php">Contact</a>
+        </div>
+        <div class="auth-buttons">
+            <?php if (isset($_SESSION['user_id'])): ?>
+                <span class="user-info">Welcome, <?php echo htmlspecialchars($_SESSION['name']); ?></span>
+                <a href="login/logout.php" class="auth-btn logout">Logout</a>
+            <?php else: ?>
+                <button class="auth-btn login" onclick="openModal('loginModal')">Login</button>
+                <button class="auth-btn register" onclick="openModal('registerModal')">Register</button>
+            <?php endif; ?>
+        </div>
+    </nav>
+
+    <div class="hero">
+        <h1>Your Smile, Our Passion</h1>
+        <p>World-class dental care across 11 Minglanilla clinics. Unmistakably Filipino hospitality. Recognized as the best dental clinic in the Philippines for veneers, implants, and cosmetic dentistry.</p>
+        <div class="buttons">
+            <button class="btn-primary">Begin the Journey</button>
+        </div>
+    </div>
+
+    <div class="features-section">
+        <h2>Why Choose MinglaDent?</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="icon">✨</div>
+                <h3>Expert Dentists</h3>
+                <p>Our team of highly skilled dentists brings years of experience and expertise to every patient.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">🏥</div>
+                <h3>Modern Facilities</h3>
+                <p>State-of-the-art equipment and technology for accurate diagnosis and effective treatments.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">💙</div>
+                <h3>Filipino Hospitality</h3>
+                <p>Experience warm, caring service that makes you feel like family from the moment you walk in.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">📍</div>
+                <h3>11 Locations</h3>
+                <p>Conveniently located across Minglanilla to serve you better wherever you are.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-section">
+        <div class="stats-grid">
+            <div class="stat-item">
+                <h3>11</h3>
+                <p>Clinics</p>
+            </div>
+            <div class="stat-item">
+                <h3>50+</h3>
+                <p>Expert Dentists</p>
+            </div>
+            <div class="stat-item">
+                <h3>10K+</h3>
+                <p>Happy Patients</p>
+            </div>
+            <div class="stat-item">
+                <h3>15+</h3>
+                <p>Years Experience</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="testimonials-section">
+        <h2>What Our Patients Say</h2>
+        <div class="testimonials-grid">
+            <div class="testimonial-card">
+                <p>"The best dental experience I've ever had! The staff is so friendly and professional. My smile has never looked better."</p>
+                <p class="author">Maria Santos</p>
+                <p class="location">Poblacion</p>
+            </div>
+            <div class="testimonial-card">
+                <p>"I was nervous about getting implants, but the team at MinglaDent made me feel so comfortable. Highly recommended!"</p>
+                <p class="author">Juan Dela Cruz</p>
+                <p class="location">Tubod</p>
+            </div>
+            <div class="testimonial-card">
+                <p>"Affordable prices without compromising quality. The Filipino hospitality here is unmatched. Truly world-class service!"</p>
+                <p class="author">Ana Reyes</p>
+                <p class="location">Cadulawan</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="cta-section">
+        <h2>Ready to Transform Your Smile?</h2>
+        <p>Book your appointment today and take the first step towards your perfect smile.</p>
+        <div class="buttons">
+            <button class="btn-primary">Book Now</button>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal('loginModal')">&times;</span>
+            <h2>Login</h2>
+            <div id="loginMessage"></div>
+            <form id="loginForm" action="login/login.php" method="POST">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" name="email" required autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" name="password" required autocomplete="off">
+                </div>
+                <button type="submit">Login</button>
+            </form>
+            <div class="switch-auth">
+                Don't have an account? <a href="#" onclick="switchModal('loginModal', 'registerModal')">Register here</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Register Modal -->
+    <div id="registerModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal('registerModal')">&times;</span>
+            <h2>Register</h2>
+            <div id="registerMessage"></div>
+            <form id="registerForm">
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" name="name" required autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" name="email" required autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" name="password" required autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label>Confirm Password</label>
+                    <input type="password" name="confirm_password" required autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label>Role</label>
+                    <select name="role" required>
+                        <option value="patient">Patient</option>
+                        <option value="clinic">Clinic Staff</option>
+                    </select>
+                </div>
+                <button type="submit">Register</button>
+            </form>
+            <div class="switch-auth">
+                Already have an account? <a href="#" onclick="switchModal('registerModal', 'loginModal')">Login here</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let lastScrollTop = 0;
+        const nav = document.querySelector('nav');
+
+        window.addEventListener('scroll', function() {
+            let scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+
+            if (scrollTop > lastScrollTop && scrollTop > 100) {
+                nav.classList.add('hidden');
+            } else {
+                nav.classList.remove('hidden');
+            }
+
+            lastScrollTop = scrollTop;
+        });
+
+        // Modal functions
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+            // Clear the form when opening
+            const form = document.getElementById(modalId).querySelector('form');
+            if (form) {
+                form.reset();
+            }
+            // Clear any messages
+            if (modalId === 'loginModal') {
+                document.getElementById('loginMessage').innerHTML = '';
+            } else if (modalId === 'registerModal') {
+                document.getElementById('registerMessage').innerHTML = '';
+            }
+            // Reset validation states
+            if (modalId === 'registerModal') {
+                isNameValid = false;
+                isEmailValid = false;
+                isPasswordValid = false;
+                isConfirmPasswordValid = false;
+                document.querySelectorAll('.validation-message').forEach(el => {
+                    el.innerHTML = '';
+                    el.style.display = 'none';
+                });
+                document.querySelectorAll('.input-valid, .input-invalid').forEach(el => {
+                    el.classList.remove('input-valid', 'input-invalid');
+                });
+            }
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+            // Clear validation signs when closing
+            if (modalId === 'registerModal') {
+                isNameValid = false;
+                isEmailValid = false;
+                isPasswordValid = false;
+                isConfirmPasswordValid = false;
+                document.querySelectorAll('.validation-message').forEach(el => {
+                    el.innerHTML = '';
+                    el.style.display = 'none';
+                });
+                document.querySelectorAll('.input-valid, .input-invalid').forEach(el => {
+                    el.classList.remove('input-valid', 'input-invalid');
+                });
+            }
+        }
+
+        function switchModal(closeId, openId) {
+            closeModal(closeId);
+            openModal(openId);
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.classList.remove('active');
+            }
+        }
+
+        // Show/hide clinic ID field based on role
+        // Removed - clinic ID field no longer needed
+
+        // Real-time validation for registration form
+        const regName = document.getElementById('regName');
+        const regEmail = document.getElementById('regEmail');
+        const regPassword = document.getElementById('regPassword');
+        const regConfirmPassword = document.getElementById('regConfirmPassword');
+        const regRole = document.getElementById('regRole');
+        const registerForm = document.getElementById('registerForm');
+
+        let isNameValid = false;
+        let isEmailValid = false;
+        let isPasswordValid = false;
+        let isConfirmPasswordValid = false;
+
+        function showValidation(elementId, message, isValid) {
+            const messageDiv = document.getElementById(elementId);
+            const input = document.getElementById(elementId.replace('Message', ''));
+            
+            messageDiv.textContent = message;
+            messageDiv.className = 'validation-message';
+            
+            if (isValid) {
+                messageDiv.classList.add('valid');
+                input.classList.remove('input-invalid');
+                input.classList.add('input-valid');
+            } else {
+                messageDiv.classList.add('invalid');
+                input.classList.remove('input-valid');
+                input.classList.add('input-invalid');
+            }
+            
+            if (message === '') {
+                messageDiv.style.display = 'none';
+                input.classList.remove('input-valid', 'input-invalid');
+            }
+        }
+
+        function validateName() {
+            const name = regName.value.trim();
+            if (name.length === 0) {
+                showValidation('nameMessage', '', false);
+                isNameValid = false;
+            } else if (name.length < 2) {
+                showValidation('nameMessage', 'Name must be at least 2 characters', false);
+                isNameValid = false;
+            } else {
+                showValidation('nameMessage', '✓ Valid', true);
+                isNameValid = true;
+            }
+            checkFormValidity();
+        }
+
+        function validateEmail() {
+            const email = regEmail.value.trim();
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            
+            if (email.length === 0) {
+                showValidation('emailMessage', '', false);
+                isEmailValid = false;
+            } else if (!emailRegex.test(email)) {
+                showValidation('emailMessage', 'Invalid email format', false);
+                isEmailValid = false;
+            } else {
+                // Check if email already exists in database
+                fetch('login/check_email.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: 'email=' + encodeURIComponent(email)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.exists) {
+                        showValidation('emailMessage', 'Email already registered', false);
+                        isEmailValid = false;
+                    } else {
+                        showValidation('emailMessage', '✓ Valid', true);
+                        isEmailValid = true;
+                    }
+                    checkFormValidity();
+                })
+                .catch(error => {
+                    showValidation('emailMessage', '✓ Valid', true);
+                    isEmailValid = true;
+                    checkFormValidity();
+                });
+            }
+            checkFormValidity();
+        }
+
+        function validatePassword() {
+            const password = regPassword.value;
+            if (password.length === 0) {
+                showValidation('passwordMessage', '', false);
+                isPasswordValid = false;
+            } else if (password.length < 6) {
+                showValidation('passwordMessage', 'Password must be at least 6 characters', false);
+                isPasswordValid = false;
+            } else {
+                showValidation('passwordMessage', '✓ Valid', true);
+                isPasswordValid = true;
+            }
+            // Re-validate confirm password
+            validateConfirmPassword();
+            checkFormValidity();
+        }
+
+        function validateConfirmPassword() {
+            const password = regPassword.value;
+            const confirmPassword = regConfirmPassword.value;
+            
+            if (confirmPassword.length === 0) {
+                showValidation('confirmPasswordMessage', '', false);
+                isConfirmPasswordValid = false;
+            } else if (password !== confirmPassword) {
+                showValidation('confirmPasswordMessage', 'Passwords do not match', false);
+                isConfirmPasswordValid = false;
+            } else {
+                showValidation('confirmPasswordMessage', '✓ Valid', true);
+                isConfirmPasswordValid = true;
+            }
+            checkFormValidity();
+        }
+
+        function checkFormValidity() {
+            // Removed button disabling - button should always be clickable
+            // Validation errors will be shown, but user can still submit
+        }
+
+        // Add event listeners
+        regName.addEventListener('input', validateName);
+        regName.addEventListener('blur', validateName);
+        
+        regEmail.addEventListener('input', function() {
+            // Debounce email validation
+            clearTimeout(window.emailTimeout);
+            window.emailTimeout = setTimeout(validateEmail, 500);
+        });
+        regEmail.addEventListener('blur', validateEmail);
+        
+        regPassword.addEventListener('input', validatePassword);
+        regPassword.addEventListener('blur', validatePassword);
+        
+        regConfirmPassword.addEventListener('input', validateConfirmPassword);
+        regConfirmPassword.addEventListener('blur', validateConfirmPassword);
+
+        // Handle register form submission with AJAX
+        document.getElementById('registerForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            
+            fetch('login/register.php', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            })
+            .then(response => response.text())
+            .then(data => {
+                // Check if response contains success message
+                if (data.includes('Registration successful')) {
+                    document.getElementById('registerMessage').innerHTML = '<div class="message success">Registration successful! Please login.</div>';
+                    this.reset();
+                    setTimeout(() => {
+                        closeModal('registerModal');
+                        openModal('loginModal');
+                    }, 1500);
+                } else {
+                    // Show error message from the response
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(data, 'text/html');
+                    const messageDiv = doc.querySelector('.message');
+                    if (messageDiv) {
+                        document.getElementById('registerMessage').innerHTML = messageDiv.outerHTML;
+                    } else {
+                        document.getElementById('registerMessage').innerHTML = '<div class="message error">Registration failed. Please try again.</div>';
+                    }
+                }
+            })
+            .catch(error => {
+                document.getElementById('registerMessage').innerHTML = '<div class="message error">Registration failed. Please try again.</div>';
+            });
+        });
+    </script>
+</body>
+</html>

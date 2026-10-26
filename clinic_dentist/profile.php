@@ -14,12 +14,7 @@ if (!$user) {
 }
 
 $clinic = null;
-$clinicId = $user['clinic_id'] ?? null;
-if (empty($clinicId)) {
-    $stmt = $pdo->prepare("SELECT clinic_id FROM clinic_staff WHERE user_id = ? LIMIT 1");
-    $stmt->execute([$user['id']]);
-    $clinicId = $stmt->fetchColumn();
-}
+$clinicId = $context['clinic_id'];
 
 if (!empty($clinicId)) {
     $stmt = $pdo->prepare("SELECT clinic_id, clinic_name, address, contact_number, email, operating_hours, map_location, status, created_at, updated_at FROM clinics WHERE clinic_id = ?");

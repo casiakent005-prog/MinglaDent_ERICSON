@@ -4,6 +4,8 @@
 
 For an existing MinglaDent database, apply `clinic_workflows.sql` once, then `patient_platform.sql` once. These migrations preserve existing rows while adding patient profiles, clinic-scoped records and services, invoices, notifications, and audit logs. Do not run the legacy `setup.php` against a populated database; it drops and recreates clinic-related tables.
 
+For Patient and Dental Clinic registration, run the additive `php database/migrate_registration.php` migration after the existing schema is ready. See [registration.md](registration.md) for configuration, private uploads, review workflow, and tests.
+
 ## Appointment and receipt notifications
 
 Bookings, cancellations, reminders, and payment receipts are stored in `notification_queue`. Configure a sender before running the worker:

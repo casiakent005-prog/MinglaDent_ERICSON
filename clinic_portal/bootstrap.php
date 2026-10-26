@@ -3,33 +3,17 @@ require_once __DIR__ . '/../database/config.php';
 
 function clinicPortalRequireRoles(array $allowedRoles): array
 {
-    global $pdo;
-
-    if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'clinic') {
-        header('Location: ../index.php');
-        exit;
+    $context = authRequireClinic();
+    $context['portal_role'] = $context['staff_role'] === 'staff' ? 'assistant' : $context['staff_role'];
+    // A clinic admin may also practice dentistry using this same membership/staff ID.
+    if ($context['staff_role'] === 'clinic_admin' && $context['is_dentist']
+        && in_array('dentist', $allowedRoles, true)) {
+        $context['portal_role'] = 'dentist';
     }
-
-    $stmt = $pdo->prepare("SELECT au.id AS user_id, au.name, au.email, au.status AS account_status, cs.staff_id, cs.clinic_id, cs.role AS staff_role, c.clinic_name FROM auth_users au INNER JOIN clinic_staff cs ON cs.user_id = au.id INNER JOIN clinics c ON c.clinic_id = cs.clinic_id WHERE au.id = ? AND au.status = 'active' LIMIT 1");
-    $stmt->execute([$_SESSION['user_id']]);
-    $context = $stmt->fetch();
-
-    if (!$context) {
-        http_response_code(403);
-        exit('This account is not assigned to an active clinic.');
-    }
-
-    $context['portal_role'] = $context['staff_role'] === 'staff'
-        ? 'assistant'
-        : $context['staff_role'];
-
     if (!in_array($context['portal_role'], $allowedRoles, true)) {
         http_response_code(403);
         exit('You do not have permission to access this page.');
     }
-
-    $_SESSION['clinic_id'] = $context['clinic_id'];
-    $_SESSION['staff_role'] = $context['staff_role'];
 
     return $context;
 }
@@ -50,7 +34,7 @@ function clinicPortalCsrfToken(): string
 
 function clinicPortalVerifyCsrf(): bool
 {
-    return isset($_POST['csrf_token'], $_SESSION['clinic_portal_csrf'])
+    return is_string($_POST['csrf_token'] ?? null) && isset($_SESSION['clinic_portal_csrf'])
         && hash_equals($_SESSION['clinic_portal_csrf'], $_POST['csrf_token']);
 }
 

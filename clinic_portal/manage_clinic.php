@@ -2,7 +2,7 @@
 require_once 'bootstrap.php';
 require_once 'layout.php';
 
-$context = clinicPortalRequireRoles(['dentist', 'assistant']);
+$context = clinicPortalRequireRoles(['clinic_admin', 'dentist', 'assistant']);
 $clinicId = (int) $context['clinic_id'];
 $message = '';
 $messageType = 'success';
@@ -120,7 +120,7 @@ $serviceStmt->execute([$clinicId]);
 $services = $serviceStmt->fetchAll();
 
 $navigation = [
-    ['key' => 'dashboard', 'label' => 'Dashboard', 'href' => $context['portal_role'] === 'dentist' ? '../clinic_dentist/dashboard.php' : '../clinic_assistant/dashboard.php', 'icon' => 'fa-home'],
+    ['key' => 'dashboard', 'label' => 'Dashboard', 'href' => authDestination(getCurrentUser()), 'icon' => 'fa-home'],
     ['key' => 'clinic', 'label' => 'My clinic & services', 'href' => 'manage_clinic.php', 'icon' => 'fa-hospital'],
 ];
 if ($context['portal_role'] === 'dentist') {

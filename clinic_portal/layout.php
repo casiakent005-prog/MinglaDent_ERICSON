@@ -28,6 +28,9 @@ function clinicPortalStart(array $context, string $title, string $activePage, ar
     $orderedNavigation[] = ['key' => 'profile', 'label' => 'Profile', 'href' => $profileHref, 'icon' => 'fa-id-card'];
     unset($navigationByKey['profile']);
 
+    if (($context['staff_role'] ?? '') === 'clinic_admin') {
+        $orderedNavigation[] = ['key' => 'administration', 'label' => 'Clinic administration', 'href' => '../clinic_admin/dashboard.php', 'icon' => 'fa-hospital'];
+    }
     $navigation = array_merge($orderedNavigation, array_values($navigationByKey));
 
     $roleLabel = $context['portal_role'] === 'dentist'

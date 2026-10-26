@@ -1,9 +1,8 @@
 <?php
-session_start();
 require_once 'database/config.php';
 $search = trim($_GET['q'] ?? '');
 $pattern = '%' . $search . '%';
-$stmt = $pdo->prepare("SELECT c.clinic_id, c.clinic_name, c.address, c.contact_number, c.email, c.operating_hours, c.map_location, c.status, dentists.dentist_names, GROUP_CONCAT(DISTINCT s.service_name ORDER BY s.service_name SEPARATOR ', ') AS service_names, MIN(sf.amount) AS lowest_fee, MAX(sf.amount) AS highest_fee, AVG(r.rating_average) AS average_rating FROM clinics c LEFT JOIN service_fees sf ON sf.clinic_id = c.clinic_id AND EXISTS (SELECT 1 FROM services active_service WHERE active_service.service_id = sf.service_id AND active_service.clinic_id = c.clinic_id AND active_service.status = 'active') LEFT JOIN services s ON s.service_id = sf.service_id AND s.clinic_id = c.clinic_id AND s.status = 'active' LEFT JOIN (SELECT cs.clinic_id, GROUP_CONCAT(DISTINCT au.name ORDER BY au.name SEPARATOR ', ') AS dentist_names FROM clinic_staff cs INNER JOIN auth_users au ON au.id = cs.user_id WHERE cs.role = 'dentist' AND au.status = 'active' GROUP BY cs.clinic_id) dentists ON dentists.clinic_id = c.clinic_id LEFT JOIN (SELECT clinic_id, AVG(rating) AS rating_average FROM clinic_ratings WHERE status = 'published' GROUP BY clinic_id) r ON r.clinic_id = c.clinic_id WHERE c.status IN ('approved', 'pending') AND (? = '' OR c.clinic_name LIKE ? OR c.address LIKE ? OR s.service_name LIKE ?) GROUP BY c.clinic_id ORDER BY (c.status = 'approved') DESC, c.clinic_name LIMIT 50");
+$stmt = $pdo->prepare("SELECT c.clinic_id, c.clinic_name, c.address, c.contact_number, c.email, c.operating_hours, c.map_location, c.status, dentists.dentist_names, GROUP_CONCAT(DISTINCT s.service_name ORDER BY s.service_name SEPARATOR ', ') AS service_names, MIN(sf.amount) AS lowest_fee, MAX(sf.amount) AS highest_fee, AVG(r.rating_average) AS average_rating FROM clinics c LEFT JOIN service_fees sf ON sf.clinic_id = c.clinic_id AND EXISTS (SELECT 1 FROM services active_service WHERE active_service.service_id = sf.service_id AND active_service.clinic_id = c.clinic_id AND active_service.status = 'active') LEFT JOIN services s ON s.service_id = sf.service_id AND s.clinic_id = c.clinic_id AND s.status = 'active' LEFT JOIN (SELECT cs.clinic_id, GROUP_CONCAT(DISTINCT au.name ORDER BY au.name SEPARATOR ', ') AS dentist_names FROM clinic_staff cs INNER JOIN auth_users au ON au.id = cs.user_id WHERE (cs.role = 'dentist' OR (cs.role = 'clinic_admin' AND cs.is_dentist = 1)) AND au.status = 'active' GROUP BY cs.clinic_id) dentists ON dentists.clinic_id = c.clinic_id LEFT JOIN (SELECT clinic_id, AVG(rating) AS rating_average FROM clinic_ratings WHERE status = 'published' GROUP BY clinic_id) r ON r.clinic_id = c.clinic_id WHERE c.status = 'approved' AND (? = '' OR c.clinic_name LIKE ? OR c.address LIKE ? OR s.service_name LIKE ?) GROUP BY c.clinic_id ORDER BY (c.status = 'approved') DESC, c.clinic_name LIMIT 50");
 $stmt->execute([$search, $pattern, $pattern, $pattern]);
 $clinics = $stmt->fetchAll();
 $clinicImages = [
@@ -305,7 +304,7 @@ require_once 'includes/header.php';
         <?php endif; ?>
         <div class="clinic-rail" aria-label="Minglanilla dental clinics">
             <?php foreach ($clinics as $clinic): ?>
-            <article class="clinic-card" onclick="openMapModal(<?php echo (int) $clinic['clinic_id']; ?>, <?php echo json_encode($clinic); ?>)">
+            <article class="clinic-card" onclick="openMapModal(<?php echo (int) $clinic['clinic_id']; ?>, <?php echo htmlspecialchars(json_encode($clinic, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8'); ?>)">
                 <?php $clinicImage = $clinicImages[((int) $clinic['clinic_id']) % count($clinicImages)]; ?>
                 <img class="clinic-cover" src="<?php echo htmlspecialchars($clinicImage, ENT_QUOTES, 'UTF-8'); ?>" alt="Dental clinic interior" loading="lazy">
                 <div class="clinic-card-body">

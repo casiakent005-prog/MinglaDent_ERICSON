@@ -7,80 +7,72 @@ $csrfToken = clinicAdminCsrfToken();
 $isGlobalAdmin = $context['portal_role'] === 'admin';
 $assignedClinicId = $isGlobalAdmin ? null : (int) ($context['clinic_id'] ?? 0);
 
-// Handle form submissions
+$message = '';
+$messageType = 'success';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     clinicAdminRequireCsrf();
     $action = $_POST['action'] ?? '';
-
-    if ($action === 'add_staff') {
-        $clinic_id = $isGlobalAdmin ? (int) ($_POST['clinic_id'] ?? 0) : $assignedClinicId;
-        $name = trim($_POST['name']);
-        $email = trim($_POST['email']);
-        $password = $_POST['password'];
-        $role = $_POST['role'] ?? '';
-
-        if (!in_array($role, ['clinic_admin', 'dentist', 'assistant', 'staff'], true)) {
-            http_response_code(400);
-            exit('Invalid staff role.');
+    try {
+        $pdo->beginTransaction();
+        if ($action === 'add_staff' || $action === 'edit_staff') {
+            $name = is_string($_POST['name'] ?? null) ? trim($_POST['name']) : '';
+            $email = is_string($_POST['email'] ?? null) ? trim($_POST['email']) : '';
+            $role = $_POST['role'] ?? '';
+            if ($name === '' || mb_strlen($name) > 255 || mb_strlen($email) > 255 || !filter_var($email, FILTER_VALIDATE_EMAIL)
+                || !in_array($role, ['clinic_admin', 'dentist', 'assistant', 'staff'], true)) {
+                throw new RuntimeException('Enter a valid name, email, and clinic role.');
+            }
+            $isDentist = $role === 'clinic_admin' && ($_POST['is_dentist'] ?? '') === '1' ? 1 : 0;
         }
-
-        $clinicCheck = $pdo->prepare("SELECT clinic_id FROM clinics WHERE clinic_id = ? LIMIT 1");
-        $clinicCheck->execute([$clinic_id]);
-        if (!$clinicCheck->fetchColumn()) {
-            http_response_code(400);
-            exit('Choose a valid clinic.');
+        if ($action === 'add_staff') {
+            $clinicId = $isGlobalAdmin ? (int) ($_POST['clinic_id'] ?? 0) : $assignedClinicId;
+            $password = $_POST['password'] ?? '';
+            if (!is_string($password) || strlen($password) < 8 || strlen($password) > 72 || str_contains($password, "\0")) {
+                throw new RuntimeException('Use a password of 8–72 bytes.');
+            }
+            $check = $pdo->prepare('SELECT clinic_id FROM clinics WHERE clinic_id = ?');
+            $check->execute([$clinicId]);
+            if (!$check->fetchColumn()) throw new RuntimeException('Choose a valid clinic.');
+            $stmt = $pdo->prepare("INSERT INTO auth_users (name, email, password, role, status, clinic_id) VALUES (?, ?, ?, 'clinic', 'active', ?)");
+            $stmt->execute([$name, $email, password_hash($password, PASSWORD_DEFAULT), $clinicId]);
+            $userId = (int) $pdo->lastInsertId();
+            $stmt = $pdo->prepare('INSERT INTO clinic_staff (user_id, clinic_id, role, is_dentist) VALUES (?, ?, ?, ?)');
+            $stmt->execute([$userId, $clinicId, $role, $isDentist]);
+            clinicPortalAudit($pdo, (int) $context['user_id'], $clinicId, 'admin.staff_created', 'user', $userId);
+        } elseif (in_array($action, ['edit_staff', 'set_staff_status'], true)) {
+            $userId = (int) ($_POST['staff_id'] ?? 0);
+            $check = $pdo->prepare("SELECT cs.clinic_id, c.owner_user_id FROM clinic_staff cs JOIN clinics c ON c.clinic_id = cs.clinic_id JOIN auth_users u ON u.id = cs.user_id WHERE cs.user_id = ? AND u.role = 'clinic'" . ($isGlobalAdmin ? '' : ' AND cs.clinic_id = ?') . ' FOR UPDATE');
+            $check->execute($isGlobalAdmin ? [$userId] : [$userId, $assignedClinicId]);
+            $member = $check->fetch();
+            if (!$member) {
+                http_response_code(404);
+                throw new RuntimeException('Staff member not found in this clinic.');
+            }
+            if ($action === 'edit_staff') {
+                if ((int) $member['owner_user_id'] === $userId && $role !== 'clinic_admin') {
+                    throw new RuntimeException('The clinic owner must retain clinic administrator access.');
+                }
+                $stmt = $pdo->prepare("UPDATE auth_users SET name = ?, email = ? WHERE id = ? AND role = 'clinic'");
+                $stmt->execute([$name, $email, $userId]);
+                $stmt = $pdo->prepare('UPDATE clinic_staff SET role = ?, is_dentist = ? WHERE user_id = ? AND clinic_id = ?');
+                $stmt->execute([$role, $isDentist, $userId, $member['clinic_id']]);
+            } else {
+                $status = $_POST['status'] ?? '';
+                if (!in_array($status, ['active', 'inactive'], true)) throw new RuntimeException('Invalid account status.');
+                if (!$isGlobalAdmin && (int) $member['owner_user_id'] === $userId) throw new RuntimeException('Only the System Admin can deactivate a clinic owner.');
+                $stmt = $pdo->prepare("UPDATE auth_users SET status = ? WHERE id = ? AND role = 'clinic'");
+                $stmt->execute([$status, $userId]);
+            }
+            clinicPortalAudit($pdo, (int) $context['user_id'], (int) $member['clinic_id'], 'admin.staff_updated', 'user', $userId);
+        } else {
+            throw new RuntimeException('Invalid staff action.');
         }
-
-        $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-
-        $stmt = $pdo->prepare("INSERT INTO auth_users (name, email, password, role, status) VALUES (?, ?, ?, 'clinic', 'active')");
-        $stmt->execute([$name, $email, $hashed_password]);
-
-        $user_id = $pdo->lastInsertId();
-
-        $stmt = $pdo->prepare("INSERT INTO clinic_staff (user_id, clinic_id, role) VALUES (?, ?, ?)");
-        $stmt->execute([$user_id, $clinic_id, $role]);
-        clinicPortalAudit($pdo, (int) $context['user_id'], $clinic_id, 'admin.staff_created', 'user', (int) $user_id);
-    } elseif ($action === 'edit_staff') {
-        $staff_id = (int) ($_POST['staff_id'] ?? 0);
-        $name = trim($_POST['name']);
-        $email = trim($_POST['email']);
-        $role = $_POST['role'] ?? '';
-
-        if (!in_array($role, ['clinic_admin', 'dentist', 'assistant', 'staff'], true)) {
-            http_response_code(400);
-            exit('Invalid staff role.');
-        }
-
-        $staffCheck = $pdo->prepare("SELECT user_id FROM clinic_staff WHERE user_id = ?" . ($isGlobalAdmin ? '' : ' AND clinic_id = ?') . " LIMIT 1");
-        $staffCheck->execute($isGlobalAdmin ? [$staff_id] : [$staff_id, $assignedClinicId]);
-        if (!$staffCheck->fetchColumn()) {
-            http_response_code(404);
-            exit('Staff member not found in this clinic.');
-        }
-
-        $stmt = $pdo->prepare("UPDATE auth_users SET name = ?, email = ?, role = 'clinic' WHERE id = ?");
-        $stmt->execute([$name, $email, $staff_id]);
-
-        $stmt = $pdo->prepare("UPDATE clinic_staff SET role = ? WHERE user_id = ?");
-        $stmt->execute([$role, $staff_id]);
-        clinicPortalAudit($pdo, (int) $context['user_id'], $assignedClinicId, 'admin.staff_updated', 'user', $staff_id);
-    } elseif ($action === 'set_staff_status') {
-        $staff_id = (int) ($_POST['staff_id'] ?? 0);
-        $status = $_POST['status'] ?? '';
-        if (!in_array($status, ['active', 'inactive'], true)) {
-            http_response_code(400);
-            exit('Invalid account status.');
-        }
-        $staffCheck = $pdo->prepare("SELECT user_id FROM clinic_staff WHERE user_id = ?" . ($isGlobalAdmin ? '' : ' AND clinic_id = ?') . " LIMIT 1");
-        $staffCheck->execute($isGlobalAdmin ? [$staff_id] : [$staff_id, $assignedClinicId]);
-        if ($staffCheck->fetchColumn()) {
-            $stmt = $pdo->prepare("UPDATE auth_users SET status = ? WHERE id = ? AND role = 'clinic'");
-            $stmt->execute([$status, $staff_id]);
-            $staffClinicStmt = $pdo->prepare("SELECT clinic_id FROM clinic_staff WHERE user_id = ? LIMIT 1");
-            $staffClinicStmt->execute([$staff_id]);
-            clinicPortalAudit($pdo, (int) $context['user_id'], (int) $staffClinicStmt->fetchColumn(), 'admin.staff_status_changed', 'user', $staff_id);
-        }
+        $pdo->commit();
+        $message = 'Staff account saved.';
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        $message = $e instanceof PDOException ? 'Unable to save this account. The email may already be registered.' : $e->getMessage();
+        $messageType = 'error';
     }
 }
 
@@ -103,6 +95,7 @@ $clinics = $clinicStmt->fetchAll();
 clinicAdminStart($context, 'Manage Staff', 'staff');
 ?>
 
+<?php if ($message): ?><div class="notice <?php echo $messageType === 'error' ? 'error' : ''; ?>"><?php echo clinicPortalEscape($message); ?></div><?php endif; ?>
 <section class="card">
     <div class="week-nav"><h3>All Staff</h3><button class="button" onclick="openModal('addStaffModal')"><i class="fas fa-plus"></i> Add Staff</button></div>
     <div class="table-wrap"><table>
@@ -113,7 +106,7 @@ clinicAdminStart($context, 'Manage Staff', 'staff');
                 <td><?php echo clinicPortalEscape($member['name']); ?></td>
                 <td><?php echo clinicPortalEscape($member['email']); ?></td>
                 <td><?php echo clinicPortalEscape($member['clinic_name']); ?></td>
-                <td><span class="badge"><?php echo ucfirst(clinicPortalEscape(str_replace('_', ' ', $member['role']))); ?></span></td>
+                <td><span class="badge"><?php echo ucfirst(clinicPortalEscape(str_replace('_', ' ', $member['role']))); ?><?php if ($member['role'] === 'clinic_admin' && $member['is_dentist']) echo ' + Dentist'; ?></span></td>
                 <td><span class="badge <?php echo clinicPortalEscape($member['account_status']); ?>"><?php echo ucfirst(clinicPortalEscape($member['account_status'])); ?></span></td>
                 <td>
                     <div class="actions">
@@ -192,6 +185,7 @@ clinicAdminStart($context, 'Manage Staff', 'staff');
                 <div class="form-field full"><label>Clinic</label><select name="clinic_id" required><?php foreach ($clinics as $clinic): ?><option value="<?php echo (int) $clinic['clinic_id']; ?>"><?php echo clinicPortalEscape($clinic['clinic_name']); ?></option><?php endforeach; ?></select></div>
                 <?php endif; ?>
                 <div class="form-field full"><label>Role</label><select name="role" required><option value="clinic_admin">Clinic Admin</option><option value="dentist">Dentist</option><option value="assistant">Assistant</option><option value="staff">Staff</option></select></div>
+                <div class="form-field full"><label><input type="checkbox" name="is_dentist" value="1"> Also practices as dentist (Clinic Admin)</label></div>
             </div>
             <button type="submit" class="button"><i class="fas fa-plus"></i> Add Staff</button>
         </form>
@@ -210,6 +204,7 @@ clinicAdminStart($context, 'Manage Staff', 'staff');
                 <div class="form-field"><label>Name</label><input type="text" name="name" id="editName" required></div>
                 <div class="form-field"><label>Email</label><input type="email" name="email" id="editEmail" required></div>
                 <div class="form-field full"><label>Role</label><select name="role" id="editRole" required><option value="clinic_admin">Clinic Admin</option><option value="dentist">Dentist</option><option value="assistant">Assistant</option><option value="staff">Staff</option></select></div>
+                <div class="form-field full"><label><input type="checkbox" id="editIsDentist" name="is_dentist" value="1"> Also practices as dentist (Clinic Admin)</label></div>
             </div>
             <button type="submit" class="button"><i class="fas fa-save"></i> Update Staff</button>
         </form>
@@ -217,7 +212,7 @@ clinicAdminStart($context, 'Manage Staff', 'staff');
 </div>
 
 <script>
-const staff = <?php echo json_encode($staff); ?>;
+const staff = <?php echo json_encode($staff, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
 
 function openModal(modalId) {
     document.getElementById(modalId).classList.add('active');
@@ -234,6 +229,7 @@ function editStaff(staffId) {
         document.getElementById('editName').value = member.name;
         document.getElementById('editEmail').value = member.email;
         document.getElementById('editRole').value = member.role;
+        document.getElementById('editIsDentist').checked = Number(member.is_dentist) === 1;
         openModal('editStaffModal');
     }
 }

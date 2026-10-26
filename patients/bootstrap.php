@@ -10,7 +10,7 @@ function patientPortalContext(): array
         exit;
     }
 
-    $stmt = $pdo->prepare("SELECT au.id AS user_id, au.name, au.email, au.status, pp.mobile_number, pp.address, pp.date_of_birth, pp.emergency_contact_name, pp.emergency_contact_phone, pp.privacy_consent_at FROM auth_users au INNER JOIN patient_profiles pp ON pp.user_id = au.id WHERE au.id = ? AND au.status = 'active' LIMIT 1");
+    $stmt = $pdo->prepare("SELECT au.id AS user_id, au.name, au.email, au.status, pp.mobile_number, pp.address, pp.date_of_birth, pp.emergency_contact_name, pp.emergency_contact_phone, pp.privacy_consent_at FROM auth_users au INNER JOIN patient_profiles pp ON pp.user_id = au.id WHERE au.id = ? AND au.role = 'patient' AND au.status = 'active' LIMIT 1");
     $stmt->execute([$_SESSION['user_id']]);
     $patient = $stmt->fetch();
 
@@ -38,7 +38,7 @@ function patientPortalCsrfToken(): string
 
 function patientPortalVerifyCsrf(): bool
 {
-    return isset($_POST['csrf_token'], $_SESSION['patient_csrf'])
+    return is_string($_POST['csrf_token'] ?? null) && isset($_SESSION['patient_csrf'])
         && hash_equals($_SESSION['patient_csrf'], $_POST['csrf_token']);
 }
 

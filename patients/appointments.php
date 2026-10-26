@@ -45,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $serviceStmt->execute([$clinicId, $clinicId, $serviceId]);
         $service = $serviceStmt->fetch();
 
-        $dentistStmt = $pdo->prepare("SELECT staff_id FROM clinic_staff cs INNER JOIN auth_users au ON au.id = cs.user_id WHERE cs.staff_id = ? AND cs.clinic_id = ? AND cs.role = 'dentist' AND au.status = 'active' LIMIT 1");
+        $dentistStmt = $pdo->prepare("SELECT staff_id FROM clinic_staff cs INNER JOIN auth_users au ON au.id = cs.user_id WHERE cs.staff_id = ? AND cs.clinic_id = ? AND (cs.role = 'dentist' OR (cs.role = 'clinic_admin' AND cs.is_dentist = 1)) AND au.status = 'active' LIMIT 1");
         $dentistStmt->execute([$staffId, $clinicId]);
         $dentistValid = (bool) $dentistStmt->fetchColumn();
 
@@ -156,7 +156,7 @@ if ($selectedClinicId > 0) {
     $serviceStmt->execute([$selectedClinicId, $selectedClinicId, $selectedClinicId]);
     $services = $serviceStmt->fetchAll();
 
-    $dentistStmt = $pdo->prepare("SELECT cs.staff_id, au.name FROM clinic_staff cs INNER JOIN auth_users au ON au.id = cs.user_id WHERE cs.clinic_id = ? AND cs.role = 'dentist' AND au.status = 'active' ORDER BY au.name");
+    $dentistStmt = $pdo->prepare("SELECT cs.staff_id, au.name FROM clinic_staff cs INNER JOIN auth_users au ON au.id = cs.user_id WHERE cs.clinic_id = ? AND (cs.role = 'dentist' OR (cs.role = 'clinic_admin' AND cs.is_dentist = 1)) AND au.status = 'active' ORDER BY au.name");
     $dentistStmt->execute([$selectedClinicId]);
     $dentists = $dentistStmt->fetchAll();
 }

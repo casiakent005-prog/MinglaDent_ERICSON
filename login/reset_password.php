@@ -46,6 +46,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($message)) {
             $stmt = $pdo->prepare("UPDATE auth_users SET password = ? WHERE id = ?");
             $stmt->execute([password_hash($password, PASSWORD_DEFAULT), $resetData['user_id']]);
 
+            // Persistent sign-in credentials must not survive a password reset.
+            $stmt = $pdo->prepare('DELETE FROM remember_tokens WHERE user_id = ?');
+            $stmt->execute([$resetData['user_id']]);
+
             // Delete the used token
             $stmt = $pdo->prepare("DELETE FROM password_reset_tokens WHERE token = ?");
             $stmt->execute([$token]);

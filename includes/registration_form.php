@@ -2,7 +2,7 @@
     <a class="registration-option <?php echo $registrationType === 'patient' ? 'selected' : ''; ?>" href="?type=patient" <?php if ($registrationType === 'patient') echo 'aria-current="true"'; ?>><i class="fas fa-user"></i><strong>Register as Patient</strong><span>Book visits and manage your dental care.</span></a>
     <a class="registration-option <?php echo $registrationType === 'clinic' ? 'selected' : ''; ?>" href="?type=clinic" <?php if ($registrationType === 'clinic') echo 'aria-current="true"'; ?>><i class="fas fa-hospital"></i><strong>Register as Dental Clinic</strong><span>Apply to become a MinglaDent partner.</span></a>
 </div>
-<?php if ($registrationType): ?>
+<?php if ($registrationReady && $registrationType): ?>
 <form method="post" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="<?php echo authEscape(authCsrfToken()); ?>">
     <input type="hidden" name="registration_type" value="<?php echo authEscape($registrationType); ?>">
@@ -49,4 +49,4 @@
     <div class="terms-checkbox"><input type="checkbox" id="termsAgreed" name="terms_agreed" value="1" required><label for="termsAgreed">I agree to the <a href="policies.php#terms" target="_blank" rel="noopener">Terms and Conditions</a> and <a href="policies.php#privacy" target="_blank" rel="noopener">Privacy Policy</a> of MinglaDent.</label></div>
     <button type="submit" class="btn-register"><?php echo $registrationType === 'clinic' ? 'Submit Clinic Application' : 'Create Patient Account'; ?></button>
 </form>
-<?php else: ?><p class="review-notice">Choose an account type to get started. Already registered? Sign in below.</p><?php endif; ?>
+<?php elseif ($registrationReady): ?><p class="review-notice">Choose an account type to get started. Already registered? Sign in below.</p><?php endif; ?>

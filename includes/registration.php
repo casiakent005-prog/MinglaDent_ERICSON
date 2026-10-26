@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/clinic_applications.php';
+require_once __DIR__ . '/registration_schema.php';
 $registrationPolicy = require __DIR__ . '/../database/registration_policy.php';
 $message = '';
 $messageType = 'error';
@@ -15,9 +16,24 @@ function registrationText(string $key, int $max, bool $required = false): string
     }
     return $value;
 }
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+$registrationReady = false;
+try {
+    $missingColumns = registrationMissingColumns($pdo);
+    $registrationReady = !$missingColumns;
+    if (!$registrationReady) {
+        error_log('Registration schema incomplete. Run php database/migrate_registration.php. Missing: ' . implode(', ', $missingColumns));
+    }
+} catch (PDOException $e) {
+    registrationLogDatabaseError($e, 'schema_check');
+}
+if (!$registrationReady) {
+    http_response_code(503);
+    $message = 'Registration setup is incomplete. Please contact MinglaDent support before trying again.';
+}
+if ($registrationReady && $_SERVER['REQUEST_METHOD'] === 'POST') {
     authRequireCsrf();
     $movedFiles = [];
+    $registrationStage = 'validate_account';
     try {
         $registrationType = registrationText('registration_type', 20, true);
         if (!in_array($registrationType, ['patient', 'clinic'], true)) throw new RuntimeException('Choose Patient or Dental Clinic.');
@@ -50,6 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (($_POST['terms_agreed'] ?? '') !== '1') throw new RuntimeException('Agree to the Terms and Conditions and Privacy Policy.');
         $emergencyName = registrationText('emergency_contact_name', 255);
         $emergencyPhone = registrationText('emergency_contact_phone', 20);
+        $registrationStage = 'check_duplicate';
         $stmt = $pdo->prepare('SELECT id FROM auth_users WHERE email = ? OR (username = ? AND ? <> \'\') LIMIT 1');
         $stmt->execute([$email, $username, $username]);
         if ($stmt->fetchColumn()) throw new RuntimeException('Email already registered or username already taken. Please sign in or choose different details.');
@@ -72,6 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $documents = clinicValidateUploads($registrationPolicy);
         }
+        $registrationStage = 'create_account';
         $pdo->beginTransaction();
         // Role and account state are assigned here. Client-supplied role/clinic/status fields are never used.
         $role = $registrationType === 'clinic' ? 'clinic' : 'patient';
@@ -80,12 +98,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             password_hash($password, PASSWORD_DEFAULT), $role, $dateOfBirth ?: null, $sex ?: null, $phone, $address]);
         $userId = (int) $pdo->lastInsertId();
         if ($registrationType === 'patient') {
+            $registrationStage = 'create_patient_profile';
             $stmt = $pdo->prepare('INSERT INTO patient_profiles (user_id, mobile_number, address, date_of_birth, emergency_contact_name, emergency_contact_phone, privacy_consent_at) VALUES (?, ?, ?, ?, ?, ?, NOW())');
             $stmt->execute([$userId, $phone, $address, $dateOfBirth, $emergencyName ?: null, $emergencyPhone ?: null]);
         } else {
+            $registrationStage = 'create_clinic';
             $stmt = $pdo->prepare("INSERT INTO clinics (clinic_name, address, contact_number, email, operating_hours, description, services_offered, service_area, owner_user_id, status, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())");
             $stmt->execute([$clinicName, $clinicAddress, $clinicPhone, $clinicEmail, $hours, $description, $offered ?: null, $area, $userId]);
             $clinicId = (int) $pdo->lastInsertId();
+            $registrationStage = 'create_membership';
             $stmt = $pdo->prepare("INSERT INTO clinic_staff (user_id, clinic_id, role, is_dentist) VALUES (?, ?, 'clinic_admin', ?)");
             $stmt->execute([$userId, $clinicId, ($_POST['practicing_dentist'] ?? '') === '1' ? 1 : 0]);
             $stmt = $pdo->prepare('UPDATE auth_users SET clinic_id = ? WHERE id = ?');
@@ -95,10 +116,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!move_uploaded_file($document['tmp_name'], $path)) throw new RuntimeException('Document storage is unavailable. Please try again later.');
                 $movedFiles[] = $path;
                 chmod($path, 0600);
+                $registrationStage = 'save_document';
                 $stmt = $pdo->prepare('INSERT INTO clinic_application_documents (clinic_id, uploaded_by, document_key, document_label, original_name, storage_name, mime_type, file_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
                 $stmt->execute([$clinicId, $userId, $document['key'], $document['label'], $document['original_name'], $document['storage_name'], $document['mime_type'], $document['file_size']]);
             }
         }
+        $registrationStage = 'commit_registration';
         $pdo->commit();
         if ($registrationType === 'clinic') {
             authStartSession(['id' => $userId, 'name' => $name, 'email' => $email, 'role' => 'clinic', 'status' => 'active']);
@@ -110,8 +133,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($pdo->inTransaction()) $pdo->rollBack();
         foreach ($movedFiles as $path) { if (is_file($path)) unlink($path); }
         if ($e instanceof PDOException) {
-            $message = $e->getCode() === '23000' ? 'Email already registered or username already taken.' : 'Registration is temporarily unavailable. Please try again later.';
-            error_log('Registration database error (' . $e->getCode() . ').');
+            $message = (int) ($e->errorInfo[1] ?? 0) === 1062 ? 'Email already registered or username already taken.' : 'Registration is temporarily unavailable. Please try again later.';
+            registrationLogDatabaseError($e, $registrationStage);
         } else {
             $message = $e->getMessage();
         }

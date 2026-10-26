@@ -14,6 +14,15 @@ Requirements: PHP 8.0+ with PDO MySQL, fileinfo, mbstring, and cURL; MySQL/Maria
    php database/migrate_registration.php
    ```
 
+   **Windows / XAMPP:** double-click `database\migrate_registration.cmd` in the downloaded project. It locates XAMPP's PHP and runs the same additive migration, retaining its output on screen. Alternatively, open Command Prompt in your project folder (for example `C:\xampp\htdocs\innovate`) and run:
+
+   ```bat
+   C:\xampp\php\php.exe database\migrate_registration.php
+   C:\xampp\php\php.exe database\migrate_registration.php --check
+   ```
+
+   Start MySQL in XAMPP first. If Apache uses custom database environment variables, provide the same values to the command prompt; otherwise the existing local defaults apply. Look for `Registration migration completed` before retrying registration. Opening the PHP migration URL in a browser is intentionally blocked. Do not use `setup.php` or import `database.sql` to repair this error.
+
    The migration is CLI-only and repeatable. It adds missing columns, indexes, and foreign keys without deleting accounts or changing existing passwords, clinic statuses, or staff roles. It refuses duplicate identities, multiple memberships for one account, and orphaned staff/profiles; reconcile those records before retrying. MySQL DDL auto-commits, so a schema/permission error may leave completed additive steps in place. Fix the reported issue and rerun. Installations with an incompatible legacy schema must reconcile it first; this migration does not silently rename tables or guess owners.
 4. Set `MINGLADENT_PRIVATE_STORAGE` to a writable directory **outside the application web root**. If omitted, the default is `mingladent-private/clinic-applications` beside the repository directory. The application creates directories with mode 0700 and files with mode 0600. Back up this directory together with the database. A public path is rejected by the application.
 5. Configure PHP `upload_max_filesize` to at least the policy limit (default 5 MB) and `post_max_size` above the total allowed document upload size. The local validation server uses 6M and 16M respectively. Set `max_file_uploads` to cover your configured checklist.
@@ -22,6 +31,12 @@ Requirements: PHP 8.0+ with PDO MySQL, fileinfo, mbstring, and cURL; MySQL/Maria
 8. Review the public Terms and Privacy text in `login/policies.php` and adjust it to the organization's published policies and contact process.
 
 The migration creates no System Admin credentials. Use an existing active System Admin account. Existing clinics retain their status and staff assignments; ownership is left null where no explicit owner was previously recorded.
+
+## Registration fails after updating the project
+
+The registration page checks required columns before accepting submissions. Missing schema returns HTTP 503 with a support notice and hides the form until the upgrade is applied. This check performs no database writes. On the server, `php database/migrate_registration.php --check` reports the missing columns without changing data. Run the migration above to repair them. The migration also fills missing optional/consent fields on existing patient profile layouts and the nullable account clinic link, preserving existing records.
+
+The older generic “Registration is temporarily unavailable” message alone cannot identify the cause. PHP's error log now records the failing operation, SQLSTATE and numeric driver code, without database error text that may contain submitted personal details. In XAMPP check `apache/logs/error.log` for `Registration database error` or `Registration schema incomplete`. Codes 42S22/1054 and 42S02/1146 indicate missing columns/tables; other codes need their own diagnosis. Never post passwords, full database dumps, or applicant documents when asking for help.
 
 ## Database changes
 
@@ -83,3 +98,5 @@ Coverage includes validation, duplicate identities, password hashes, patient and
 The deployed database was not reachable in the task sandbox. Apply the migration there and verify against its actual schema and existing data before rollout. Local integration tests use actual MariaDB with synthetic test records.
 
 Google/Facebook provider handshakes, payment providers, email/SMS delivery, Apache/Nginx production configuration, and HTTPS cookie behavior were not exercised by this registration test suite. Password-provider callbacks now share account-status checks and role routing. Existing password-reset code only logs a reset link; delivering reset emails remains an existing integration requirement. Clinic decisions are visible in the application; no new email/SMS notification service is implied.
+
+For missing-upgrade regression coverage, use another empty `*_test` database and run `php tests/registration_upgrade.php`. It starts a temporary HTTP server, verifies incomplete-schema handling, applies the upgrade, and submits both registration types to the actual database.

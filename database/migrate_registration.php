@@ -2,6 +2,7 @@
 // Additive, repeatable migration. Never invoke the destructive legacy setup.php.
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/../includes/registration_schema.php';
 
 function registrationColumns(PDO $pdo, string $table): array {
     return $pdo->query("SHOW COLUMNS FROM `$table`")->fetchAll(PDO::FETCH_UNIQUE);
@@ -31,6 +32,15 @@ function registrationUnique(PDO $pdo, string $table, string $column, string $nam
 }
 
 try {
+    if (in_array('--check', $argv, true)) {
+        $missing = registrationMissingColumns($pdo);
+        if ($missing) {
+            fwrite(STDERR, "Registration schema is incomplete. Missing: " . implode(', ', $missing) . "\nRun php database/migrate_registration.php to apply the additive upgrade.\n");
+            exit(1);
+        }
+        echo "Registration schema is ready. No database changes made.\n";
+        exit(0);
+    }
     // Preflight before DDL: stop on ambiguous legacy data rather than guessing ownership.
     foreach (['auth_users' => ['id', 'name', 'email', 'password', 'role', 'status'],
               'clinics' => ['clinic_id', 'clinic_name', 'address', 'contact_number', 'email', 'status'],
@@ -59,7 +69,7 @@ try {
         throw new RuntimeException('Orphaned patient profiles require reconciliation before migration.');
     }
     registrationAddColumns($pdo, 'auth_users', [
-        'username' => 'VARCHAR(100) NULL', 'first_name' => 'VARCHAR(100) NULL',
+        'clinic_id' => 'INT NULL', 'username' => 'VARCHAR(100) NULL', 'first_name' => 'VARCHAR(100) NULL',
         'middle_name' => 'VARCHAR(100) NULL', 'last_name' => 'VARCHAR(100) NULL',
         'date_of_birth' => 'DATE NULL', 'sex' => "ENUM('male','female','other') NULL",
         'contact_number' => 'VARCHAR(20) NULL', 'complete_address' => 'TEXT NULL',
@@ -94,6 +104,11 @@ try {
         privacy_consent_at DATETIME NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB");
+    registrationAddColumns($pdo, 'patient_profiles', [
+        'mobile_number' => 'VARCHAR(20) NULL', 'address' => 'VARCHAR(255) NULL',
+        'date_of_birth' => 'DATE NULL', 'emergency_contact_name' => 'VARCHAR(255) NULL',
+        'emergency_contact_phone' => 'VARCHAR(20) NULL', 'privacy_consent_at' => 'DATETIME NULL',
+    ]);
     registrationUnique($pdo, 'patient_profiles', 'user_id', 'uq_registration_patient_user');
     registrationForeignKey($pdo, 'patient_profiles', 'user_id', 'auth_users', 'id', 'fk_registration_patient_user');
     $pdo->exec("CREATE TABLE IF NOT EXISTS clinic_application_documents (
@@ -119,6 +134,8 @@ try {
         expires_at DATETIME NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB");
+    $missing = registrationMissingColumns($pdo);
+    if ($missing) throw new RuntimeException('Registration schema remains incomplete: ' . implode(', ', $missing));
     echo "Registration migration completed. Existing accounts and clinic statuses preserved.\n";
 } catch (Throwable $e) {
     fwrite(STDERR, 'Migration stopped: ' . $e->getMessage() . "\nMySQL DDL auto-commits; resolve the reported issue and rerun this additive migration.\n");

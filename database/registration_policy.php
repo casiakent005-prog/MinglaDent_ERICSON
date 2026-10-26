@@ -2,7 +2,16 @@
 // MinglaDent review policy, not an official licensing checklist.
 // Keep stable keys for existing submissions. Change labels/requirements here as needed.
 return [
-    'service_areas' => ['Minglanilla, Cebu'],
+    'service_areas' => [
+        'Minglanilla, Cebu',
+        'Talisay City, Cebu',
+        'Cebu City, Cebu',
+        'Naga City, Cebu',
+        'Danao City, Cebu',
+        'Liloan, Cebu',
+        'Toledo City, Cebu',
+        'Bogo City, Cebu',
+    ],
     'documents' => [
         'authorization' => [
             'label' => 'Proof of clinic ownership or authorization to represent the clinic',

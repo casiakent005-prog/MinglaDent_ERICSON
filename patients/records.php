@@ -1,5 +1,4 @@
 <?php
-session_start();
 require_once '../database/config.php';
 
 // Check if user is logged in and is a patient

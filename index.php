@@ -1,5 +1,4 @@
 <?php
-session_start();
 require_once 'database/config.php';
 $pageTitle = 'MinglaDent';
 require_once 'includes/header.php';

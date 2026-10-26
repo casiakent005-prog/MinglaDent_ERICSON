@@ -173,7 +173,7 @@ clinicAdminStart($context, 'Manage Services', 'services');
 </div>
 
 <script>
-const services = <?php echo json_encode($services); ?>;
+const services = <?php echo json_encode($services, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
 
 function openModal(modalId) {
     document.getElementById(modalId).classList.add('active');

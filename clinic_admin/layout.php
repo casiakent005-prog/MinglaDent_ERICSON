@@ -31,6 +31,12 @@ function clinicAdminStart(array $context, string $title, string $activePage, arr
         unset($navigationByKey['clinics']);
     }
 
+    if ($context['portal_role'] === 'clinic_admin') {
+        $navigationByKey['clinic'] = ['key' => 'clinic', 'label' => 'My clinic & services', 'href' => '../clinic_portal/manage_clinic.php', 'icon' => 'fa-hospital'];
+        if (!empty($context['is_dentist'])) {
+            $navigationByKey['dentist'] = ['key' => 'dentist', 'label' => 'Dentist dashboard', 'href' => '../clinic_dentist/dashboard.php', 'icon' => 'fa-user-md'];
+        }
+    }
     $navigation = array_values($navigationByKey);
 
     // Manually build the layout since clinicPortalStart has different role handling

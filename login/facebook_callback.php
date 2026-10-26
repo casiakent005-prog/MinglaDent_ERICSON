@@ -2,7 +2,7 @@
 require_once '../database/config.php';
 require_once '../database/social_auth_config.php';
 
-session_start();
+
 
 $config = require '../database/social_auth_config.php';
 $fbConfig = $config['facebook'];
@@ -76,19 +76,13 @@ try {
 
     if ($existingUser) {
         // User exists, log them in
-        session_regenerate_id(true);
-        $_SESSION['user_id'] = $existingUser['id'];
-        $_SESSION['name'] = $existingUser['name'];
-        $_SESSION['email'] = $existingUser['email'];
-        $_SESSION['role'] = $existingUser['role'];
-        $_SESSION['staff_role'] = null;
-        $_SESSION['clinic_id'] = $existingUser['clinic_id'] ?? null;
+        authStartSession($existingUser);
 
         // Log successful login
         $stmt = $pdo->prepare("INSERT INTO social_auth_log (user_id, auth_provider, provider_user_id, action, status, ip_address) VALUES (?, 'facebook', ?, 'login', 'success', ?)");
         $stmt->execute([$existingUser['id'], $facebookId, $_SERVER['REMOTE_ADDR']]);
 
-        header('Location: ../index.php');
+        header('Location: ' . authDestination(getCurrentUser()));
         exit;
     }
 
@@ -109,15 +103,9 @@ try {
             $stmt->execute([$emailUser['id'], $facebookId, $_SERVER['REMOTE_ADDR']]);
 
             // Log them in
-            session_regenerate_id(true);
-            $_SESSION['user_id'] = $emailUser['id'];
-            $_SESSION['name'] = $emailUser['name'];
-            $_SESSION['email'] = $emailUser['email'];
-            $_SESSION['role'] = $emailUser['role'];
-            $_SESSION['staff_role'] = null;
-            $_SESSION['clinic_id'] = $emailUser['clinic_id'] ?? null;
+            authStartSession($emailUser);
 
-            header('Location: ../index.php');
+            header('Location: ' . authDestination(getCurrentUser()));
             exit;
         }
     }
@@ -159,7 +147,7 @@ try {
     $_SESSION['staff_role'] = null;
     $_SESSION['clinic_id'] = null;
 
-    header('Location: ../index.php');
+    header('Location: ' . authDestination(getCurrentUser()));
     exit;
 
 } catch (Exception $e) {

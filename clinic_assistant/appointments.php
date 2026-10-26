@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $patientStmt->execute([$patientId, $context['clinic_id']]);
         $patientExists = $patientStmt->fetchColumn();
 
-        $dentistStmt = $pdo->prepare("SELECT staff_id FROM clinic_staff WHERE staff_id = ? AND clinic_id = ? AND role = 'dentist' LIMIT 1");
+        $dentistStmt = $pdo->prepare("SELECT staff_id FROM clinic_staff WHERE staff_id = ? AND clinic_id = ? AND (role = 'dentist' OR (role = 'clinic_admin' AND is_dentist = 1)) LIMIT 1");
         $dentistStmt->execute([$staffId, $context['clinic_id']]);
         $dentistExists = (bool) $dentistStmt->fetchColumn();
 
@@ -128,7 +128,7 @@ $stmt = $pdo->prepare("SELECT patient_id, name FROM patients WHERE clinic_id = ?
 $stmt->execute([$context['clinic_id']]);
 $patients = $stmt->fetchAll();
 
-$stmt = $pdo->prepare("SELECT cs.staff_id, au.name FROM clinic_staff cs INNER JOIN auth_users au ON au.id = cs.user_id WHERE cs.clinic_id = ? AND cs.role = 'dentist' AND au.status = 'active' ORDER BY au.name");
+$stmt = $pdo->prepare("SELECT cs.staff_id, au.name FROM clinic_staff cs INNER JOIN auth_users au ON au.id = cs.user_id WHERE cs.clinic_id = ? AND (cs.role = 'dentist' OR (cs.role = 'clinic_admin' AND cs.is_dentist = 1)) AND au.status = 'active' ORDER BY au.name");
 $stmt->execute([$context['clinic_id']]);
 $dentists = $stmt->fetchAll();
 

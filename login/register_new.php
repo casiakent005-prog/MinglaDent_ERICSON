@@ -1,110 +1,6 @@
 <?php
-require_once '../database/config.php';
-
-$message = '';
-$messageType = '';
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $firstName = trim($_POST['first_name'] ?? '');
-    $middleName = trim($_POST['middle_name'] ?? '');
-    $lastName = trim($_POST['last_name'] ?? '');
-    $dateOfBirth = trim($_POST['date_of_birth'] ?? '');
-    $sex = trim($_POST['sex'] ?? '');
-    $contactNumber = trim($_POST['contact_number'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $completeAddress = trim($_POST['complete_address'] ?? '');
-    $username = trim($_POST['username'] ?? '');
-    $password = $_POST['password'] ?? '';
-    $confirmPassword = $_POST['confirm_password'] ?? '';
-    $termsAgreed = isset($_POST['terms_agreed']);
-
-    // Validation
-    if (empty($firstName) || empty($lastName) || empty($email) || empty($contactNumber)) {
-        $message = 'First name, last name, email, and contact number are required.';
-        $messageType = 'error';
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $message = 'Please enter a valid email address.';
-        $messageType = 'error';
-    } elseif (strlen($password) < 8) {
-        $message = 'Password must be at least 8 characters long.';
-        $messageType = 'error';
-    } elseif ($password !== $confirmPassword) {
-        $message = 'Passwords do not match.';
-        $messageType = 'error';
-    } elseif (!$termsAgreed) {
-        $message = 'You must agree to the Terms and Conditions and Privacy Policy.';
-        $messageType = 'error';
-    } else {
-        try {
-            $pdo->beginTransaction();
-
-            // Check if email already exists
-            $stmt = $pdo->prepare("SELECT id FROM auth_users WHERE email = ? LIMIT 1");
-            $stmt->execute([$email]);
-            if ($stmt->fetch()) {
-                $message = 'Email already registered. Please use a different email or login.';
-                $messageType = 'error';
-                $pdo->rollBack();
-            } else {
-                // Check if username already exists
-                if (!empty($username)) {
-                    $stmt = $pdo->prepare("SELECT id FROM auth_users WHERE username = ? LIMIT 1");
-                    $stmt->execute([$username]);
-                    if ($stmt->fetch()) {
-                        $message = 'Username already taken. Please choose a different username.';
-                        $messageType = 'error';
-                        $pdo->rollBack();
-                    }
-                }
-
-                if (empty($message)) {
-                    // Create full name from parts
-                    $fullName = trim($firstName . ' ' . $middleName . ' ' . $lastName);
-                    $fullName = preg_replace('/\s+/', ' ', $fullName); // Remove extra spaces
-
-                    // Insert into auth_users
-                    $stmt = $pdo->prepare("INSERT INTO auth_users (name, first_name, middle_name, last_name, email, username, password, role, status, date_of_birth, sex, contact_number, complete_address, auth_provider) VALUES (?, ?, ?, ?, ?, ?, ?, 'patient', 'active', ?, ?, ?, ?, 'email')");
-                    $stmt->execute([
-                        $fullName,
-                        $firstName ?: null,
-                        $middleName ?: null,
-                        $lastName,
-                        $email,
-                        $username ?: null,
-                        password_hash($password, PASSWORD_DEFAULT),
-                        $dateOfBirth ?: null,
-                        $sex ?: null,
-                        $contactNumber,
-                        $completeAddress ?: null
-                    ]);
-
-                    $userId = (int) $pdo->lastInsertId();
-
-                    // Insert into patient_profiles for backward compatibility
-                    $stmt = $pdo->prepare("INSERT INTO patient_profiles (user_id, mobile_number, address, date_of_birth, privacy_consent_at) VALUES (?, ?, ?, ?, NOW())");
-                    $stmt->execute([
-                        $userId,
-                        $contactNumber,
-                        $completeAddress ?: null,
-                        $dateOfBirth ?: null
-                    ]);
-
-                    $pdo->commit();
-
-                    $message = 'Registration successful! Please log in with your credentials.';
-                    $messageType = 'success';
-                }
-            }
-        } catch (PDOException $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-            $message = 'Registration failed. Please try again.';
-            $messageType = 'error';
-            error_log("Registration error: " . $e->getMessage());
-        }
-    }
-}
+require_once __DIR__ . '/../database/config.php';
+require_once __DIR__ . '/../includes/registration.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -478,6 +374,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 font-size: 28px;
             }
         }
+        .registration-options { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin: 12px 0 24px; }
+        .registration-option { display:flex; flex-direction:column; gap:10px; border:2px solid #dbe4f4; border-radius:10px; padding:18px 12px; text-decoration:none; color:#43617f; font-size:13px; line-height:1.5; }
+        .registration-option i { color:#6784c8; font-size:24px; }
+        .registration-option:hover, .registration-option.selected { border-color:#6784c8; background:#f1f6ff; }
+        .review-notice { color:#52647d; font-size:13px; line-height:1.7; margin-bottom:20px; }
+        textarea.form-control { resize:vertical; font:inherit; }
+        .form-group small { display:block; margin-top:8px; line-height:1.6; color:#52647d; }
+        @media(max-width:420px) { .registration-options {grid-template-columns:1fr;} }
     </style>
 </head>
 <body>
@@ -497,96 +401,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             <?php endif; ?>
 
-            <form method="POST">
-                <h3 class="section-title">Personal Information</h3>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>First Name <span class="required">*</span></label>
-                        <input type="text" name="first_name" class="form-control" required autocomplete="given-name">
-                    </div>
-                    <div class="form-group">
-                        <label>Middle Name</label>
-                        <input type="text" name="middle_name" class="form-control" autocomplete="additional-name">
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Last Name <span class="required">*</span></label>
-                    <input type="text" name="last_name" class="form-control" required autocomplete="family-name">
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Date of Birth</label>
-                        <input type="date" name="date_of_birth" class="form-control">
-                    </div>
-                    <div class="form-group">
-                        <label>Sex</label>
-                        <select name="sex" class="form-control">
-                            <option value="">Select</option>
-                            <option value="male">Male</option>
-                            <option value="female">Female</option>
-                            <option value="other">Other</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Contact Number <span class="required">*</span></label>
-                        <input type="tel" name="contact_number" class="form-control" required autocomplete="tel">
-                    </div>
-                    <div class="form-group">
-                        <label>Email Address <span class="required">*</span></label>
-                        <input type="email" name="email" id="email" class="form-control" required autocomplete="email">
-                        <span id="emailMessage" class="validation-message"></span>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Complete Address</label>
-                    <input type="text" name="complete_address" class="form-control" autocomplete="street-address">
-                </div>
-
-                <h3 class="section-title">Account Information</h3>
-
-                <div class="form-group">
-                    <label>Username</label>
-                    <input type="text" name="username" id="username" class="form-control" autocomplete="username">
-                    <span id="usernameMessage" class="validation-message"></span>
-                </div>
-
-                <div class="form-group">
-                    <label>Password <span class="required">*</span></label>
-                    <div class="input-wrapper">
-                        <input type="password" name="password" id="password" class="form-control" required minlength="8" autocomplete="new-password">
-                        <i class="fas fa-eye password-toggle" id="togglePassword"></i>
-                    </div>
-                    <div class="password-strength">
-                        <div class="password-strength-bar" id="strengthBar"></div>
-                    </div>
-                    <p class="strength-text" id="strengthText"></p>
-                </div>
-
-                <div class="form-group">
-                    <label>Confirm Password <span class="required">*</span></label>
-                    <div class="input-wrapper">
-                        <input type="password" name="confirm_password" id="confirmPassword" class="form-control" required minlength="8" autocomplete="new-password">
-                        <i class="fas fa-eye password-toggle" id="toggleConfirmPassword"></i>
-                    </div>
-                    <span id="confirmPasswordMessage" class="validation-message"></span>
-                </div>
-
-                <div class="terms-checkbox">
-                    <input type="checkbox" name="terms_agreed" id="termsAgreed" required>
-                    <label for="termsAgreed">
-                        I agree to the <a href="#">Terms and Conditions</a> and <a href="#">Privacy Policy</a> of MinglaDent.
-                    </label>
-                </div>
-
-                <button type="submit" class="btn-register">Create Account</button>
-            </form>
+            <?php require __DIR__ . '/../includes/registration_form.php'; ?>
 
             <p class="login-link">
                 Already have an account? <a href="login_new.php">Sign In</a>
@@ -604,6 +419,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
     <script>
+        if (document.getElementById('password')) {
         // Toggle password visibility
         document.getElementById('togglePassword').addEventListener('click', function() {
             const password = document.getElementById('password');
@@ -621,6 +437,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             this.classList.toggle('fa-eye-slash');
         });
 
+        document.querySelectorAll('.password-toggle').forEach(toggle => {
+            toggle.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggle.click(); }
+            });
+        });
         // Password strength indicator
         const passwordInput = document.getElementById('password');
         const strengthBar = document.getElementById('strengthBar');
@@ -761,6 +582,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 this.classList.remove('input-invalid', 'input-valid');
             }
         });
+        }
     </script>
 </body>
 </html>

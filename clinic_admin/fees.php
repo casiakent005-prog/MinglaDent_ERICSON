@@ -173,7 +173,7 @@ clinicAdminStart($context, 'Manage Fees', 'fees');
 </div>
 
 <script>
-const fees = <?php echo json_encode($fees); ?>;
+const fees = <?php echo json_encode($fees, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
 const adminCsrfToken = <?php echo json_encode($csrfToken); ?>;
 
 function openModal(modalId) {

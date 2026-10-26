@@ -10,46 +10,19 @@ function clinicAdminContext(): array
         exit;
     }
 
-    $role = $_SESSION['role'] ?? '';
-
-    if ($role === 'admin') {
-        $stmt = $pdo->prepare("SELECT id AS user_id, name, email, status AS account_status FROM auth_users WHERE id = ? LIMIT 1");
-        $stmt->execute([$_SESSION['user_id']]);
-        $context = $stmt->fetch();
-
-        if (!$context) {
-            header('Location: ../login/logout.php');
-            exit;
-        }
-
-        $context['portal_role'] = 'admin';
-        $context['clinic_id'] = null;
-        $context['clinic_name'] = 'System Administration';
-        $context['staff_id'] = null;
-        $context['staff_role'] = 'admin';
-
-        return $context;
+    $user = getCurrentUser();
+    if ($user && $user['role'] === 'admin' && $user['status'] === 'active') {
+        return ['user_id' => $user['id'], 'name' => $user['name'], 'email' => $user['email'],
+            'account_status' => $user['status'], 'portal_role' => 'admin', 'clinic_id' => null,
+            'clinic_name' => 'System Administration', 'staff_id' => null, 'staff_role' => 'admin'];
     }
-
-    if ($role === 'clinic') {
-        $stmt = $pdo->prepare("SELECT au.id AS user_id, au.name, au.email, au.status AS account_status, cs.staff_id, cs.clinic_id, cs.role AS staff_role, c.clinic_name FROM auth_users au INNER JOIN clinic_staff cs ON cs.user_id = au.id INNER JOIN clinics c ON c.clinic_id = cs.clinic_id WHERE au.id = ? AND au.status = 'active' LIMIT 1");
-        $stmt->execute([$_SESSION['user_id']]);
-        $context = $stmt->fetch();
-
-        if (!$context) {
-            http_response_code(403);
-            exit('This account is not assigned to an active clinic.');
-        }
-
+    if ($user && $user['role'] === 'clinic') {
+        $context = authRequireClinic();
         if ($context['staff_role'] !== 'clinic_admin') {
-            header('Location: ../clinic_portal/dashboard.php');
-            exit;
+            http_response_code(403);
+            exit('Clinic administrator access is required.');
         }
-
         $context['portal_role'] = 'clinic_admin';
-        $_SESSION['clinic_id'] = $context['clinic_id'];
-        $_SESSION['staff_role'] = $context['staff_role'];
-
         return $context;
     }
 
@@ -68,7 +41,7 @@ function clinicAdminCsrfToken(): string
 
 function clinicAdminVerifyCsrf(): bool
 {
-    return isset($_POST['csrf_token'], $_SESSION['clinic_admin_csrf'])
+    return is_string($_POST['csrf_token'] ?? null) && isset($_SESSION['clinic_admin_csrf'])
         && hash_equals($_SESSION['clinic_admin_csrf'], $_POST['csrf_token']);
 }
 

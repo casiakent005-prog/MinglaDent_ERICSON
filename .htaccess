@@ -1,0 +1,10 @@
+# Application documents are served through authenticated PHP endpoints only.
+# Keep repository, maintenance, and backup files out of the public web surface.
+Options -Indexes
+<FilesMatch "(^\.|\.(sql|md|json|backup|sh)$)">
+    Require all denied
+</FilesMatch>
+
+<If "%{REQUEST_URI} =~ m#/(?:\.git|\.env)(?:/|$)#">
+    Require all denied
+</If>

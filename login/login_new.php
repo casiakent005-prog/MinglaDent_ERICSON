@@ -1,82 +1,4 @@
-<?php
-require_once '../database/config.php';
-
-$message = '';
-$messageType = '';
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email = trim($_POST['email'] ?? '');
-    $password = $_POST['password'] ?? '';
-    $remember = isset($_POST['remember']);
-
-    if (empty($email) || empty($password)) {
-        $message = 'Email and password are required';
-        $messageType = 'error';
-    } else {
-        try {
-            $stmt = $pdo->prepare("SELECT * FROM auth_users WHERE email = ? AND status = 'active'");
-            $stmt->execute([$email]);
-            $user = $stmt->fetch();
-
-            if ($user && password_verify($password, $user['password'])) {
-                session_regenerate_id(true);
-                $_SESSION['user_id'] = $user['id'];
-                $_SESSION['name'] = $user['name'];
-                $_SESSION['email'] = $user['email'];
-                $_SESSION['role'] = $user['role'];
-                $_SESSION['staff_role'] = null;
-                $_SESSION['clinic_id'] = $user['clinic_id'] ?? null;
-
-                // Remember me functionality
-                if ($remember) {
-                    $token = bin2hex(random_bytes(32));
-                    $expires = date('Y-m-d H:i:s', strtotime('+30 days'));
-                    $stmt = $pdo->prepare("INSERT INTO remember_tokens (user_id, token, expires_at) VALUES (?, ?, ?)");
-                    $stmt->execute([$user['id'], $token, $expires]);
-                    setcookie('remember_token', $token, time() + (86400 * 30), '/', '', false, true);
-                }
-
-                // Redirect based on role
-                if ($user['role'] === 'clinic') {
-                    $staffStmt = $pdo->prepare("SELECT role, clinic_id FROM clinic_staff WHERE user_id = ? LIMIT 1");
-                    $staffStmt->execute([$user['id']]);
-                    $staffAssignment = $staffStmt->fetch();
-
-                    if ($staffAssignment) {
-                        $_SESSION['staff_role'] = $staffAssignment['role'];
-                        $_SESSION['clinic_id'] = $staffAssignment['clinic_id'];
-
-                        if ($staffAssignment['role'] === 'dentist') {
-                            header("Location: ../clinic_dentist/dashboard.php");
-                        } elseif (in_array($staffAssignment['role'], ['assistant', 'staff'], true)) {
-                            header("Location: ../clinic_assistant/dashboard.php");
-                        } else {
-                            header("Location: ../clinic_admin/dashboard.php");
-                        }
-                    } else {
-                        header("Location: ../clinic_admin/profile.php");
-                    }
-                } else {
-                    if ($user['role'] === 'patient') {
-                        header('Location: ../index.php');
-                    } elseif ($user['role'] === 'admin') {
-                        header('Location: ../system_admin/dashboard.php');
-                    } else {
-                        header('Location: ../index.php');
-                    }
-                }
-                exit;
-            } else {
-                $message = 'Invalid email or password';
-                $messageType = 'error';
-            }
-        } catch(PDOException $e) {
-            $message = 'Login failed. Please try again.';
-            $messageType = 'error';
-        }
-    }
-}
-?>
+<?php require __DIR__ . '/../includes/login_handler.php'; ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -467,16 +389,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php endif; ?>
 
             <form method="POST">
+                <input type="hidden" name="csrf_token" value="<?php echo authEscape(authCsrfToken()); ?>">
                 <div class="form-group">
-                    <label>Email</label>
+                    <label for="email">Email or username</label>
                     <div class="input-wrapper">
                         <i class="fas fa-envelope"></i>
-                        <input type="email" name="email" class="form-control" placeholder="Enter your email" required autocomplete="email">
+                        <input type="text" id="email" name="email" class="form-control" placeholder="Enter your email or username" required autocomplete="username">
                     </div>
                 </div>
 
                 <div class="form-group">
-                    <label>Password</label>
+                    <label for="password">Password</label>
                     <div class="input-wrapper">
                         <input type="password" name="password" id="password" class="form-control password-input" placeholder="Enter your password" required autocomplete="current-password">
                         <i class="fas fa-eye password-toggle" id="togglePassword"></i>
